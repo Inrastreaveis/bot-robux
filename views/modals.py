@@ -30,7 +30,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode assumir tickets.",
                 ephemeral=True
@@ -76,7 +76,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode usar este botão.",
                 ephemeral=True
@@ -113,7 +113,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode usar este botão.",
                 ephemeral=True
@@ -144,7 +144,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode fechar tickets.",
                 ephemeral=True
