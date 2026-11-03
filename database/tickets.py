@@ -12,6 +12,8 @@ async def criar_ticket(
     vip: bool,
     desconto: float,
     desconto_aplicado: bool,
+    metodo_compra: str = "Outro",
+    robux_gamepass: int = 0,
 ):
     async with aiosqlite.connect(str(DATABASE)) as db:
 
@@ -29,9 +31,11 @@ async def criar_ticket(
                 desconto,
                 desconto_aplicado,
                 status,
-                criado_em
+                criado_em,
+                metodo_compra,
+                robux_gamepass
             )
-            VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
+            VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), ?, ?)
             """,
             (
                 canal_id,
@@ -42,7 +46,9 @@ async def criar_ticket(
                 int(vip),
                 desconto,
                 int(desconto_aplicado),
-                "Aguardando"
+                "Aguardando",
+                metodo_compra,
+                robux_gamepass
             )
         )
 
@@ -67,7 +73,9 @@ async def buscar_ticket(canal_id: int):
                 desconto,
                 desconto_aplicado,
                 status,
-                criado_em
+                criado_em,
+                metodo_compra,
+                robux_gamepass
             FROM tickets
             WHERE canal_id = ?
             """,
@@ -166,3 +174,19 @@ async def fechar_ticket(canal_id: int):
         await db.commit()
         print("tickets.py carregado")
 print("Funções:", dir())
+
+async def atualizar_desconto_vip_ticket(
+    canal_id: int,
+    novo_valor: float,
+    desconto: float,
+):
+    async with aiosqlite.connect(str(DATABASE)) as db:
+        await db.execute(
+            """
+            UPDATE tickets
+            SET valor = ?, desconto = ?, desconto_aplicado = 1, vip = 1
+            WHERE canal_id = ?
+            """,
+            (novo_valor, desconto, canal_id),
+        )
+        await db.commit()
