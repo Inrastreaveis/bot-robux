@@ -16,7 +16,7 @@ class Ranking(commands.Cog):
     )
     async def ranking(self, interaction: discord.Interaction):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Você não possui permissão para usar este comando.",
                 ephemeral=True
