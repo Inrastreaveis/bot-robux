@@ -8,7 +8,8 @@ from database.configuracoes import obter_configuracoes, salvar_configuracoes
 
 
 EDITABLE_FIELDS = {
-    "group_price_per_1000": ("Grupo • preço por 1.000 Robux", "42.00", "Ex.: 42,00"),
+    "group_price_per_1000": ("Grupo • preço por 1.000 completos", "27.00", "Padrão original: 27,00"),
+    "group_price_per_remainder_robux": ("Grupo • preço por Robux restante", "0.03", "Padrão original: 0,03"),
     "plus_price_per_1000": ("Plus • preço por 1.000 Robux", "38.00", "Ex.: 38,00"),
     "gamepass_price_per_1000": ("Gamepass • preço por 1.000 Robux", "42.00", "Ex.: 42,00"),
     "gamepass_fee_multiplier": ("Gamepass • multiplicador da taxa", "1.429", "Padrão: 1,429"),
@@ -49,7 +50,7 @@ def resumo_config(config: dict) -> discord.Embed:
     embed.add_field(
         name="💰 Preços atuais",
         value=(
-            f"**Grupo:** R$ {config['group_price_per_1000']} / 1.000 Robux\n"
+            f"**Grupo:** R$ {config['group_price_per_1000']} por 1.000 completos + R$ {config['group_price_per_remainder_robux']} por Robux restante\n"
             f"**Plus:** R$ {config['plus_price_per_1000']} / 1.000\n"
             f"**Gamepass:** R$ {config['gamepass_price_per_1000']} / 1.000\n"
             f"**Multiplicador Gamepass:** {config['gamepass_fee_multiplier']}\n"
@@ -57,12 +58,6 @@ def resumo_config(config: dict) -> discord.Embed:
         ),
         inline=False,
     )
-    grupo_pacotes = config.get("group_packages", {})
-    grupo_pacotes_texto = " • ".join(
-        f"{int(q):,}".replace(",", ".") + f" = {fmt(preco)}"
-        for q, preco in sorted(grupo_pacotes.items(), key=lambda item: int(item[0]))
-    ) or "Nenhum pacote fixo"
-    embed.add_field(name="👥 Pacotes Grupo com preço definido", value=grupo_pacotes_texto, inline=False)
     embed.add_field(name="🎮 Pacotes Gamepass com preço definido", value=pacotes_texto, inline=False)
     embed.add_field(
         name="🔘 Modalidades",
@@ -184,40 +179,6 @@ class PacotesGamepassModal(discord.ui.Modal, title="Editar pacotes Gamepass"):
         await interaction.response.send_message("✅ Pacotes Gamepass atualizados e salvos.", ephemeral=True)
 
 
-class PacotesGrupoModal(discord.ui.Modal, title="Editar pacotes por Grupo"):
-    pacotes = discord.ui.TextInput(
-        label="Pacotes no formato quantidade=preço",
-        placeholder="500=22;1000=42;3000=126;5000=210",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=1000,
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        if not somente_admin(interaction):
-            return await interaction.response.send_message("❌ Apenas administradores podem editar os pacotes.", ephemeral=True)
-        novos = {}
-        texto = str(self.pacotes.value).strip()
-        try:
-            if texto:
-                for parte in texto.split(";"):
-                    quantidade_txt, preco_txt = parte.split("=", 1)
-                    quantidade = int(quantidade_txt.strip())
-                    preco = Decimal(preco_txt.strip().replace("R$", "").replace(",", ".").strip())
-                    if quantidade <= 0 or quantidade > 1_000_000 or not preco.is_finite() or preco < 0:
-                        raise ValueError
-                    novos[str(quantidade)] = str(preco.quantize(Decimal("0.01")))
-        except (ValueError, InvalidOperation):
-            return await interaction.response.send_message(
-                "❌ Formato inválido. Use, por exemplo: `500=22;1000=42;3000=126;5000=210`. Deixe em branco para remover os preços fixos.",
-                ephemeral=True,
-            )
-        config = await obter_configuracoes()
-        config["group_packages"] = novos
-        await salvar_configuracoes(config)
-        await interaction.response.send_message("✅ Pacotes por Grupo atualizados e salvos.", ephemeral=True)
-
-
 class TextosPainelModal(discord.ui.Modal, title="Editar textos do painel"):
     titulo = discord.ui.TextInput(label="Título do painel", max_length=100, required=True)
     descricao = discord.ui.TextInput(
@@ -321,14 +282,6 @@ class ConfigBotView(discord.ui.View):
             view=ConfigPrecosView(),
             ephemeral=True,
         )
-
-    @discord.ui.button(label="Editar pacotes Grupo", emoji="👥", style=discord.ButtonStyle.primary, row=0)
-    async def editar_pacotes_grupo(self, interaction: discord.Interaction, button: discord.ui.Button):
-        config = await obter_configuracoes()
-        atuais = ";".join(f"{q}={p}" for q, p in sorted(config.get("group_packages", {}).items(), key=lambda x: int(x[0])))
-        modal = PacotesGrupoModal()
-        modal.pacotes.default = atuais
-        await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Editar pacotes Gamepass", emoji="🎮", style=discord.ButtonStyle.primary, row=0)
     async def editar_pacotes(self, interaction: discord.Interaction, button: discord.ui.Button):
