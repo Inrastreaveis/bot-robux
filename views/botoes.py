@@ -1,14 +1,17 @@
 import asyncio
 import discord
+from decimal import Decimal
 
-from config import VIP_ROLE
 
 from utils.permissions import is_staff
 
 from views.modal_venda import RegistrarVenda
 from views.avaliacao import AvaliacaoView
 
-from database.vip import pode_usar, registrar_uso
+from database.vip import pode_usar, registrar_uso, obter_usos
+from database.configuracoes import obter_configuracoes
+from database.tickets import atualizar_desconto_vip_ticket
+from utils.calculos_robux import calcular_desconto_vip, formatar_reais
 from database.tickets import (
     assumir_ticket,
     buscar_ticket,
@@ -20,8 +23,13 @@ from database.tickets import (
 
 class TicketButtons(discord.ui.View):
 
-    def __init__(self):
+    def __init__(self, vip_aplicado: bool = False):
         super().__init__(timeout=None)
+        if vip_aplicado:
+            for item in self.children:
+                if getattr(item, "custom_id", None) == "usar_vip":
+                    item.disabled = True
+                    item.label = "👑 VIP Já Aplicado"
 
     @discord.ui.button(
         label="👮 Assumir Atendimento",
@@ -34,7 +42,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode assumir tickets.",
                 ephemeral=True
@@ -88,7 +96,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode usar este botão.",
                 ephemeral=True
@@ -110,7 +118,9 @@ class TicketButtons(discord.ui.View):
                 ephemeral=True
             )
 
-        cargo_vip = interaction.guild.get_role(VIP_ROLE)
+        config = await obter_configuracoes()
+        vip_role_id = int(config.get("vip_role_id", 0) or 0)
+        cargo_vip = interaction.guild.get_role(vip_role_id) if vip_role_id else None
 
         if cargo_vip not in cliente.roles:
             return await interaction.response.send_message(
@@ -118,29 +128,49 @@ class TicketButtons(discord.ui.View):
                 ephemeral=True
             )
 
-        if not await pode_usar(cliente.id):
+        metodo = ticket[12] if len(ticket) > 12 and ticket[12] else "Outro"
+        if metodo != "Grupo":
             return await interaction.response.send_message(
-                "❌ Este cliente já utilizou os 2 descontos deste mês.",
+                "❌ O desconto VIP é válido somente para compras por Grupo.",
                 ephemeral=True
             )
 
-        novo_valor = round(ticket[6] - ((ticket[5] / 1000) * 27), 2)
+        # Se o desconto já veio aplicado pela calculadora, o uso foi contado
+        # na confirmação. Não permite aplicar nem contabilizar pela segunda vez.
+        if len(ticket) > 9 and bool(ticket[9]):
+            button.disabled = True
+            button.label = "👑 VIP Já Aplicado"
+            await interaction.response.edit_message(view=self)
+            return await interaction.followup.send(
+                "✅ O desconto VIP já foi aplicado na calculadora e contabilizado na confirmação do pedido.",
+                ephemeral=True,
+            )
+
+        if not await pode_usar(cliente.id):
+            config = await obter_configuracoes()
+            limite = int(config.get("vip_uses_per_month", 2))
+            usos = await obter_usos(cliente.id)
+            return await interaction.response.send_message(
+                f"❌ Este cliente já utilizou os {limite} descontos disponíveis neste mês ({usos}/{limite}).",
+                ephemeral=True
+            )
+
+        config = await obter_configuracoes()
+        desconto_dec, total_dec = calcular_desconto_vip(Decimal(str(ticket[6])), config)
+        novo_valor = float(total_dec)
+        await atualizar_desconto_vip_ticket(
+            interaction.channel.id,
+            novo_valor,
+            float(desconto_dec),
+        )
 
         await registrar_uso(cliente.id)
 
-        await atualizar_valores_ticket(
-            interaction.channel.id,
-            ticket[5],
-            novo_valor
-        )
-
         button.disabled = True
         button.label = "👑 VIP Utilizado"
-
         await interaction.response.edit_message(view=self)
-
         await interaction.followup.send(
-            f"✅ Desconto VIP aplicado.\nNovo valor: **R$ {novo_valor:.2f}**",
+            f"✅ Uso do desconto VIP registrado.\nValor do pedido: **{formatar_reais(novo_valor)}**",
             ephemeral=True
         )
 
@@ -155,7 +185,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode usar este botão.",
                 ephemeral=True
@@ -187,7 +217,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff.",
                 ephemeral=True
@@ -215,7 +245,7 @@ class TicketButtons(discord.ui.View):
         button: discord.ui.Button
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode fechar tickets.",
                 ephemeral=True
