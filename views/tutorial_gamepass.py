@@ -85,3 +85,22 @@ class TutorialGamepassView(discord.ui.View):
     @discord.ui.button(label="Tutorial pelo celular", emoji="📱", style=discord.ButtonStyle.primary)
     async def mobile(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(embed=embed_tutorial_mobile(), ephemeral=True)
+
+
+class TutorialGamepassTicketButton(discord.ui.Button):
+    """Botao exibido no ticket de pedidos feitos por Gamepass."""
+
+    def __init__(self):
+        super().__init__(
+            label="Como criar a Gamepass",
+            emoji="📚",
+            style=discord.ButtonStyle.secondary,
+            custom_id="tutorial_gamepass_ticket",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Escolha o tutorial em português para o seu dispositivo:",
+            view=TutorialGamepassView(),
+            ephemeral=True,
+        )
