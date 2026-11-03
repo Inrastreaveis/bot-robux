@@ -63,7 +63,7 @@ class ComentarioModal(discord.ui.Modal):
                 desconto_aplicado,
                 status,
                 criado_em
-            ) = ticket
+            ) = ticket[:12]
 
             cliente = interaction.guild.get_member(cliente_id)
             atendente = interaction.guild.get_member(staff_id)
