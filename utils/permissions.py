@@ -1,22 +1,20 @@
 import discord
-from config import STAFF_ROLE
+
+from database.configuracoes import obter_configuracoes
 
 
-def is_staff(interaction: discord.Interaction) -> bool:
-    """Verifica se o usuário é administrador ou possui o cargo de Staff."""
+async def is_staff(interaction: discord.Interaction) -> bool:
+    """Verifica administrador, dono do servidor ou cargo de Staff configurado."""
+    if not interaction.guild:
+        return False
 
-    # Administrador do servidor
     if interaction.user.guild_permissions.administrator:
         return True
 
-    # Dono do servidor
     if interaction.guild.owner_id == interaction.user.id:
         return True
 
-    # Cargo da Staff
-    cargo_staff = interaction.guild.get_role(STAFF_ROLE)
-
-    if cargo_staff and cargo_staff in interaction.user.roles:
-        return True
-
-    return False
+    config = await obter_configuracoes()
+    staff_role_id = int(config.get("staff_role_id", 0) or 0)
+    cargo_staff = interaction.guild.get_role(staff_role_id) if staff_role_id else None
+    return bool(cargo_staff and cargo_staff in getattr(interaction.user, "roles", []))
