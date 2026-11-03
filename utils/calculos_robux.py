@@ -14,13 +14,18 @@ def dinheiro(valor: Decimal) -> Decimal:
 
 
 def calcular_grupo(quantidade: int, config: dict) -> Decimal:
-    # Os pacotes definidos pelo dono têm prioridade. Para qualquer quantidade
-    # personalizada, calcula proporcionalmente pelo preço por 1.000 Robux.
-    pacotes = config.get("group_packages", {})
-    preco_pacote = pacotes.get(str(quantidade))
-    if preco_pacote is not None:
-        return dinheiro(Decimal(str(preco_pacote)))
-    valor = Decimal(quantidade) * Decimal(str(config["group_price_per_1000"])) / Decimal(1000)
+    """Preserva exatamente a regra da calculadora original por Grupo.
+
+    O código original cobrava R$ 27,00 por cada bloco completo de 1.000
+    Robux e R$ 0,03 por cada Robux restante. Ex.: 650 = R$ 19,50;
+    1.600 = R$ 45,00.
+    """
+    quantidade = int(quantidade)
+    milhares = quantidade // 1000
+    restante = quantidade % 1000
+    preco_milhar = Decimal(str(config.get("group_price_per_1000", "27.00")))
+    preco_restante = Decimal(str(config.get("group_price_per_remainder_robux", "0.03")))
+    valor = (Decimal(milhares) * preco_milhar) + (Decimal(restante) * preco_restante)
     return dinheiro(valor)
 
 
