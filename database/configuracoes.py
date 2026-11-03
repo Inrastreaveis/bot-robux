@@ -9,11 +9,13 @@ from database.database import DATABASE
 from config import CATEGORY_TICKETS, STAFF_ROLE, VIP_ROLE
 
 CONFIG_KEY = "loja_config_v1"
+GROUP_CALCULATOR_VERSION = 2
 
 DEFAULT_CONFIG = {
-    # Tabela de Grupo informada para a loja; quantidades livres usam R$ 42/1.000.
-    "group_price_per_1000": "42.00",
-    "group_packages": {"500": "22.00", "1000": "42.00", "3000": "126.00", "5000": "210.00"},
+    # Regra original da calculadora por Grupo: R$27 por milheiro completo
+    # e R$0,03 por cada Robux que sobrar.
+    "group_price_per_1000": "27.00",
+    "group_price_per_remainder_robux": "0.03",
     "plus_price_per_1000": "38.00",
     "gamepass_price_per_1000": "42.00",
     # Multiplicador conservador informado pelo dono da loja.
@@ -35,6 +37,7 @@ DEFAULT_CONFIG = {
     "category_tickets_id": CATEGORY_TICKETS,
     "staff_role_id": STAFF_ROLE,
     "vip_role_id": VIP_ROLE,
+    "_group_calculator_version": GROUP_CALCULATOR_VERSION,
 }
 
 
@@ -54,20 +57,32 @@ async def obter_configuracoes() -> dict:
             saved = json.loads(row[0])
             if isinstance(saved, dict):
                 config.update(saved)
+            else:
+                saved = {}
         except (TypeError, json.JSONDecodeError):
             saved = {}
 
-    # Completa apenas as opções ausentes. Dicionário vazio é uma escolha válida
-    # do administrador (significa usar somente o preço proporcional).
+    # Migração única: restaura a calculadora por Grupo à regra do código
+    # original enviado pelo usuário. Isso também corrige o valor 42/1.000 e
+    # os pacotes fixos que foram introduzidos por engano na atualização.
+    # Depois desta migração, o administrador ainda pode editar os dois
+    # parâmetros pelo /configbot.
+    if saved.get("_group_calculator_version") != GROUP_CALCULATOR_VERSION:
+        config["group_price_per_1000"] = DEFAULT_CONFIG["group_price_per_1000"]
+        config["group_price_per_remainder_robux"] = DEFAULT_CONFIG["group_price_per_remainder_robux"]
+        config["_group_calculator_version"] = GROUP_CALCULATOR_VERSION
+        config.pop("group_packages", None)
+        await salvar_configuracoes(config)
+
     methods = deepcopy(DEFAULT_CONFIG["enabled_methods"])
     methods.update(config.get("enabled_methods") or {})
     config["enabled_methods"] = methods
 
-    for key in ("gamepass_packages", "group_packages"):
-        if key not in saved:
-            config[key] = deepcopy(DEFAULT_CONFIG[key])
-        elif isinstance(saved[key], dict):
-            config[key] = saved[key]
+    # A Gamepass mantém os pacotes personalizados configuráveis. Grupo não
+    # usa pacotes fixos: sempre segue a fórmula original acima.
+    if "gamepass_packages" not in saved or not isinstance(config.get("gamepass_packages"), dict):
+        config["gamepass_packages"] = deepcopy(DEFAULT_CONFIG["gamepass_packages"])
+    config.pop("group_packages", None)
     return config
 
 
