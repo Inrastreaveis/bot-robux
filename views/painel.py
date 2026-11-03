@@ -1,11 +1,13 @@
 import discord
 
-from config import CATEGORY_TICKETS, STAFF_ROLE
+from database.configuracoes import obter_configuracoes
 
 from database.tickets import criar_ticket
 
 from views.botoes import TicketButtons
 from views.modal_calculadora import CalculadoraRobux
+from views.calculadora_metodos import MetodoCompraView
+from views.tutorial_gamepass import TutorialGamepassView
 
 
 def criar_embed_ticket(
@@ -47,9 +49,10 @@ class AbrirTicket(discord.ui.View):
         categoria_nome: str
     ):
 
-        categoria = interaction.guild.get_channel(
-            CATEGORY_TICKETS
-        )
+        config = await obter_configuracoes()
+        categoria_id = int(config.get("category_tickets_id", 0) or 0)
+        staff_role_id = int(config.get("staff_role_id", 0) or 0)
+        categoria = interaction.guild.get_channel(categoria_id)
 
         if categoria is None:
             return await interaction.response.send_message(
@@ -81,18 +84,19 @@ class AbrirTicket(discord.ui.View):
                     read_message_history=True
                 ),
 
-            interaction.guild.get_role(STAFF_ROLE):
-                discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    read_message_history=True
-                ),
-
             interaction.guild.me:
                 discord.PermissionOverwrite(
                     view_channel=True
                 )
         }
+
+        staff_role = interaction.guild.get_role(staff_role_id) if staff_role_id else None
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+            )
 
         canal = await interaction.guild.create_text_channel(
             name=f"ticket-{interaction.user.name}",
@@ -109,7 +113,9 @@ class AbrirTicket(discord.ui.View):
             valor=0,
             vip=False,
             desconto=0,
-            desconto_aplicado=False
+            desconto_aplicado=False,
+            metodo_compra="Outro",
+            robux_gamepass=0,
         )
 
         await canal.send(
@@ -177,8 +183,30 @@ class AbrirTicket(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-        await interaction.response.send_modal(
-            CalculadoraRobux()
+        await interaction.response.send_message(
+            "Escolha como deseja comprar seus Robux:",
+            view=MetodoCompraView(),
+            ephemeral=True,
+        )
+
+    # ==========================
+    # TUTORIAL GAMEPASS
+    # ==========================
+    @discord.ui.button(
+        label="Tutorial Gamepass",
+        emoji="📚",
+        style=discord.ButtonStyle.secondary,
+        custom_id="tutorial_gamepass"
+    )
+    async def tutorial_gamepass(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_message(
+            "Escolha o tutorial do seu dispositivo:",
+            view=TutorialGamepassView(),
+            ephemeral=True,
         )
 
     # ==========================
