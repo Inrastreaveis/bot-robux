@@ -5,6 +5,7 @@ from database.tickets import criar_ticket
 from database.vip import pode_usar, registrar_uso
 from utils.calculos_robux import formatar_reais, formatar_robux
 from views.botoes import TicketButtons
+from views.tutorial_gamepass import TutorialGamepassTicketButton
 
 
 class ConfirmarPedido(discord.ui.View):
@@ -119,7 +120,11 @@ class ConfirmarPedido(discord.ui.View):
                 embed.add_field(name="ℹ️ Desconto VIP", value="Não aplicável para esta modalidade.", inline=False)
 
             embed.set_footer(text="Campany • Sistema de Atendimento")
-            await canal.send(content=interaction.user.mention, embed=embed, view=TicketButtons(vip_aplicado=self.desconto_aplicado))
+            ticket_view = TicketButtons(vip_aplicado=self.desconto_aplicado)
+            if self.metodo == "Gamepass":
+                ticket_view.add_item(TutorialGamepassTicketButton())
+
+            await canal.send(content=interaction.user.mention, embed=embed, view=ticket_view)
 
             await criar_ticket(
                 canal_id=canal.id,
@@ -140,8 +145,21 @@ class ConfirmarPedido(discord.ui.View):
 
             for item in self.children:
                 item.disabled = True
+            mensagem_confirmacao = (
+                f"✅ Pedido confirmado! Seu ticket foi criado: {canal.mention}\n"
+                f"🛒 **Modalidade:** {self.metodo}\n"
+                f"💎 **Robux que deseja receber:** {formatar_robux(self.robux)}\n"
+                f"💰 **Valor do pedido:** {formatar_reais(self.valor)}"
+            )
+            if self.metodo == "Gamepass":
+                mensagem_confirmacao += (
+                    f"\n🎮 **Crie sua Gamepass com:** "
+                    f"{formatar_robux(self.robux_gamepass)} Robux"
+                    "\n📚 No ticket, clique em **Como criar a Gamepass** para abrir o tutorial em português."
+                )
+
             await interaction.response.edit_message(
-                content=f"✅ Pedido confirmado! Seu ticket foi criado: {canal.mention}",
+                content=mensagem_confirmacao,
                 embed=None,
                 view=self,
             )
