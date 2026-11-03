@@ -22,7 +22,7 @@ class Admin(commands.Cog):
         id: int
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Você não possui permissão.",
                 ephemeral=True
@@ -89,7 +89,7 @@ class Admin(commands.Cog):
         id: int
     ):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Você não possui permissão.",
                 ephemeral=True
