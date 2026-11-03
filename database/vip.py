@@ -1,6 +1,7 @@
 import aiosqlite
 from datetime import datetime
 from database.database import DATABASE
+from database.configuracoes import obter_configuracoes
 
 
 def mes_atual():
@@ -26,7 +27,9 @@ async def obter_usos(user_id: int):
 
 
 async def pode_usar(user_id: int):
-    return await obter_usos(user_id) < 2
+    config = await obter_configuracoes()
+    limite = int(config.get("vip_uses_per_month", 2))
+    return await obter_usos(user_id) < max(0, limite)
     
 
 async def registrar_uso(user_id: int):
