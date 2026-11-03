@@ -16,7 +16,7 @@ class VendasLista(commands.Cog):
     )
     async def vendas(self, interaction: discord.Interaction):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Você não possui permissão.",
                 ephemeral=True
