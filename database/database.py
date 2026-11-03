@@ -55,9 +55,19 @@ async def criar_banco():
     desconto REAL DEFAULT 0,
     desconto_aplicado INTEGER DEFAULT 0,
     status TEXT,
-    criado_em TEXT
+    criado_em TEXT,
+    metodo_compra TEXT DEFAULT 'Outro',
+    robux_gamepass INTEGER DEFAULT 0
 )
         """)
+
+        # Migração compatível com bancos já existentes na hospedagem.
+        cursor = await db.execute("PRAGMA table_info(tickets)")
+        colunas_ticket = {linha[1] for linha in await cursor.fetchall()}
+        if "metodo_compra" not in colunas_ticket:
+            await db.execute("ALTER TABLE tickets ADD COLUMN metodo_compra TEXT DEFAULT 'Outro'")
+        if "robux_gamepass" not in colunas_ticket:
+            await db.execute("ALTER TABLE tickets ADD COLUMN robux_gamepass INTEGER DEFAULT 0")
         # VIP
         await db.execute("""
         CREATE TABLE IF NOT EXISTS vip_uso (
