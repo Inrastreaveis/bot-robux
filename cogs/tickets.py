@@ -4,6 +4,7 @@ from discord import app_commands
 
 from views.painel import AbrirTicket
 from utils.permissions import is_staff
+from database.configuracoes import obter_configuracoes
 
 
 class Tickets(commands.Cog):
@@ -17,22 +18,16 @@ class Tickets(commands.Cog):
     )
     async def painel(self, interaction: discord.Interaction):
 
-        if not is_staff(interaction):
+        if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Você não possui permissão.",
                 ephemeral=True
             )
 
+        config = await obter_configuracoes()
         embed = discord.Embed(
-            title="🛒 Atendimento Campany",
-            description=(
-                "Seja bem-vindo à **Campany**!\n\n"
-                "Escolha uma das opções abaixo para abrir um atendimento.\n\n"
-                "🛒 **Comprar Robux**\n"
-                "👑 **Comprar Korblox**\n"
-                "🧮 **Calcular Robux**\n"
-                "🛠️ **Suporte Técnico**"
-            ),
+            title=config.get("panel_title", "🛒 Atendimento Campany"),
+            description=config.get("panel_description", "Escolha uma opção abaixo."),
             color=discord.Color.blue()
         )
 
