@@ -8,6 +8,7 @@ from views.botoes import TicketButtons
 from views.modal_calculadora import CalculadoraRobux
 from views.calculadora_metodos import MetodoCompraView
 from views.tutorial_gamepass import TutorialGamepassView
+from views.verificar_roblox import VerificarRobloxModal
 
 
 def criar_embed_ticket(
@@ -216,7 +217,8 @@ class AbrirTicket(discord.ui.View):
         label="Suporte Técnico",
         emoji="🛠️",
         style=discord.ButtonStyle.red,
-        custom_id="suporte_tecnico"
+        custom_id="suporte_tecnico",
+        row=1
     )
     async def suporte(
         self,
@@ -227,3 +229,21 @@ class AbrirTicket(discord.ui.View):
             interaction,
             "🛠️ Suporte Técnico"
         )
+
+    # ==========================
+    # VERIFICAR DIAS NO ROBLOX
+    # ==========================
+    @discord.ui.button(
+        label="Verificar dias no Roblox",
+        emoji="📅",
+        style=discord.ButtonStyle.primary,
+        custom_id="verificar_dias_roblox",
+        row=1
+    )
+    async def verificar_dias_roblox(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_modal(VerificarRobloxModal())
+
