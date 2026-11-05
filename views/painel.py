@@ -5,7 +5,6 @@ from database.configuracoes import obter_configuracoes
 from database.tickets import criar_ticket
 
 from views.botoes import TicketButtons
-from views.modal_calculadora import CalculadoraRobux
 from views.calculadora_metodos import MetodoCompraView
 from views.tutorial_gamepass import TutorialGamepassView
 from views.verificar_roblox import VerificarRobloxModal
@@ -134,24 +133,6 @@ class AbrirTicket(discord.ui.View):
         )
 
     # ==========================
-    # COMPRAR ROBUX
-    # ==========================
-    @discord.ui.button(
-        label="Comprar Robux",
-        emoji="🛒",
-        style=discord.ButtonStyle.green,
-        custom_id="comprar_robux"
-    )
-    async def comprar_robux(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-        await interaction.response.send_modal(
-            CalculadoraRobux()
-        )
-
-    # ==========================
     # COMPRAR KORBLOX
     # ==========================
     @discord.ui.button(
@@ -174,7 +155,7 @@ class AbrirTicket(discord.ui.View):
     # CALCULADORA
     # ==========================
     @discord.ui.button(
-        label="Calcular Robux",
+        label="Comprar/Calcular Robux",
         emoji="🧮",
         style=discord.ButtonStyle.gray,
         custom_id="calcular_robux"
@@ -185,7 +166,7 @@ class AbrirTicket(discord.ui.View):
         button: discord.ui.Button
     ):
         await interaction.response.send_message(
-            "Escolha como deseja comprar seus Robux:",
+            "Escolha uma modalidade para calcular o valor dos Robux. Se os pedidos dessa modalidade estiverem ativados, você também poderá confirmar a compra:",
             view=MetodoCompraView(),
             ephemeral=True,
         )
