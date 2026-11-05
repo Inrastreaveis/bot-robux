@@ -40,8 +40,15 @@ def criar_embed_ticket(
 
 class AbrirTicket(discord.ui.View):
 
-    def __init__(self):
+    def __init__(self, korblox_enabled: bool = True):
         super().__init__(timeout=None)
+
+        # Quando Korblox estiver desativado, remove o botão dos novos painéis.
+        if not korblox_enabled:
+            for item in tuple(self.children):
+                if getattr(item, "custom_id", None) == "comprar_korblox":
+                    self.remove_item(item)
+                    break
 
     async def criar_ticket(
         self,
@@ -146,6 +153,14 @@ class AbrirTicket(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
+        # Bloqueia também painéis antigos que ainda tenham o botão visível.
+        config = await obter_configuracoes()
+        if not config.get("enabled_methods", {}).get("Korblox", True):
+            return await interaction.response.send_message(
+                "❌ A abertura de pedidos de Korblox está temporariamente desativada.",
+                ephemeral=True,
+            )
+
         await self.criar_ticket(
             interaction,
             "👑 Comprar Korblox"
