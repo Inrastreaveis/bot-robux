@@ -23,7 +23,7 @@ DEFAULT_CONFIG = {
     "gamepass_packages": {"500": "22.00", "1000": "42.00", "3000": "126.00", "5000": "210.00"},
     "vip_discount_percent": "7",
     "vip_uses_per_month": 2,
-    "enabled_methods": {"Grupo": True, "Plus": True, "Gamepass": True},
+    "enabled_methods": {"Grupo": True, "Plus": True, "Gamepass": True, "Korblox": True},
     "panel_title": "🛒 Atendimento Campany",
     "panel_description": (
         "Seja bem-vindo à **Campany**!\n\n"
