@@ -69,15 +69,31 @@ class Tickets(commands.Cog):
             etapa = "Montando embed"
             print(f"[PAINEL] {etapa}")
 
+            enabled_methods = config.get("enabled_methods", {})
+            korblox_enabled = bool(enabled_methods.get("Korblox", True))
+
+            descricao_painel = config.get(
+                "panel_description",
+                "Escolha uma opção abaixo."
+            )
+
+            # Esconde a linha de Korblox da descrição quando o botão estiver desativado.
+            if not korblox_enabled:
+                descricao_painel = "\n".join(
+                    linha
+                    for linha in descricao_painel.splitlines()
+                    if not (
+                        "comprar" in linha.casefold()
+                        and "korblox" in linha.casefold()
+                    )
+                ).strip()
+
             embed = discord.Embed(
                 title=config.get(
                     "panel_title",
                     "🛒 Atendimento Campany"
                 ),
-                description=config.get(
-                    "panel_description",
-                    "Escolha uma opção abaixo."
-                ),
+                description=descricao_painel,
                 color=discord.Color.blue()
             )
 
@@ -108,7 +124,7 @@ class Tickets(commands.Cog):
             etapa = "Criando botões"
             print(f"[PAINEL] {etapa}")
 
-            view = AbrirTicket()
+            view = AbrirTicket(korblox_enabled=korblox_enabled)
 
             # Envia painel
             etapa = "Enviando painel no Discord"
