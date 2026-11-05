@@ -1,4 +1,5 @@
 import discord
+from pathlib import Path
 from discord.ext import commands
 from discord import app_commands
 
@@ -31,7 +32,6 @@ class Tickets(commands.Cog):
             color=discord.Color.blue()
         )
 
-        # Imagem personalizada do painel (arquivo enviado junto ao projeto).
         image_path = (
             Path(__file__).resolve().parent.parent
             / "assets"
@@ -40,7 +40,7 @@ class Tickets(commands.Cog):
 
         if not image_path.is_file():
             return await interaction.response.send_message(
-                "❌ A imagem do painel não foi encontrada em assets/campany-store.png.",
+                "❌ A imagem do painel não foi encontrada.",
                 ephemeral=True
             )
 
