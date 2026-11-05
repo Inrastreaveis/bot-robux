@@ -3,13 +3,11 @@ from pathlib import Path
 from datetime import datetime
 
 # Caminho do banco de dados
-# No Railway, o volume persistente fica montado em /data.
-# Fora do Railway, mantém o banco na raiz do projeto.
+# No Railway, usa o volume persistente montado em /data.
+# Fora do Railway, mantém o banco local na raiz do projeto.
+PROJECT_DATABASE = Path(__file__).resolve().parent.parent / "database.db"
 VOLUME_DATABASE = Path("/data/database.db")
-if VOLUME_DATABASE.parent.is_dir():
-    DATABASE = VOLUME_DATABASE
-else:
-    DATABASE = Path(__file__).resolve().parent.parent / "database.db"
+DATABASE = VOLUME_DATABASE if Path("/data").is_mount() else PROJECT_DATABASE
 
 
 # ==========================
@@ -94,3 +92,5 @@ async def criar_banco():
             descricao TEXT
         )
         """)
+
+        # CONFIGURAÇÕES
