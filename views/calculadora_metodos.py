@@ -21,12 +21,8 @@ class MetodoCompraView(discord.ui.View):
         super().__init__(timeout=180)
 
     async def abrir_modal(self, interaction: discord.Interaction, metodo: str):
-        config = await obter_configuracoes()
-        if not config.get("enabled_methods", {}).get(metodo, True):
-            return await interaction.response.send_message(
-                f"❌ A modalidade **{metodo}** está temporariamente desativada.",
-                ephemeral=True,
-            )
+        # A modalidade pode continuar sendo usada para simulação mesmo quando
+        # a criação de pedidos/tickets estiver desativada no /configbot.
         await interaction.response.send_modal(QuantidadeRobuxModal(metodo))
 
     @discord.ui.button(label="Comprar por Grupo", emoji="👥", style=discord.ButtonStyle.success)
@@ -72,11 +68,6 @@ class QuantidadeRobuxModal(discord.ui.Modal):
             )
 
         config = await obter_configuracoes()
-        if not config.get("enabled_methods", {}).get(self.metodo, True):
-            return await interaction.response.send_message(
-                f"❌ A modalidade **{self.metodo}** está temporariamente desativada.",
-                ephemeral=True,
-            )
 
         desconto = 0
         desconto_aplicado = False
@@ -139,7 +130,11 @@ class QuantidadeRobuxModal(discord.ui.Modal):
             embed.add_field(name="👑 VIP", value=aviso_vip, inline=False)
 
         embed.add_field(name="💰 Total do pedido", value=f"**{formatar_reais(total)}**", inline=False)
-        embed.set_footer(text="Confira os dados antes de confirmar seu pedido.")
+        metodo_ativo = config.get("enabled_methods", {}).get(self.metodo, True)
+        if metodo_ativo:
+            embed.set_footer(text="Confira os dados e confirme para abrir seu ticket de pedido.")
+        else:
+            embed.set_footer(text="Simulação liberada. A confirmação de pedido está temporariamente desativada para esta modalidade.")
 
         await interaction.response.send_message(
             embed=embed,
