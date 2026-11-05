@@ -205,7 +205,7 @@ class ToggleMetodosView(discord.ui.View):
     def __init__(self, config: dict):
         super().__init__(timeout=240)
         methods = config.get("enabled_methods", {})
-        for item, key in zip(self.children, ("Grupo", "Plus", "Gamepass")):
+        for item, key in zip(self.children, ("Grupo", "Plus", "Gamepass", "Korblox")):
             item.label = f"{key}: {'ATIVADO' if methods.get(key, True) else 'DESATIVADO'}"
             item.style = discord.ButtonStyle.success if methods.get(key, True) else discord.ButtonStyle.secondary
 
@@ -233,6 +233,10 @@ class ToggleMetodosView(discord.ui.View):
     @discord.ui.button(label="Gamepass", style=discord.ButtonStyle.success)
     async def gamepass(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._toggle(interaction, "Gamepass")
+
+    @discord.ui.button(label="Korblox", style=discord.ButtonStyle.success)
+    async def korblox(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._toggle(interaction, "Korblox")
 
 
 class EditarIdsModal(discord.ui.Modal, title="Editar canais e cargos"):
@@ -295,7 +299,7 @@ class ConfigBotView(discord.ui.View):
     async def metodos(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = await obter_configuracoes()
         await interaction.response.send_message(
-            "Ative ou desative a abertura de pedidos/tickets por modalidade.\n"
+            "Ative ou desative os pedidos por Grupo, Plus, Gamepass e o botão Comprar Korblox.\n"
             "A calculadora continuará funcionando mesmo quando uma modalidade estiver desativada:",
             view=ToggleMetodosView(config),
             ephemeral=True,
@@ -323,8 +327,7 @@ class ConfigBot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="configbot", description="Abre o painel para editar preços e a calculadora da loja.")
-    async def configbot(self, interaction: discord.Interaction):
+    async def _mostrar_configuracoes(self, interaction: discord.Interaction):
         if not somente_admin(interaction):
             return await interaction.response.send_message(
                 "❌ Este comando é exclusivo do dono e dos administradores do servidor.",
@@ -336,6 +339,10 @@ class ConfigBot(commands.Cog):
             view=ConfigBotView(),
             ephemeral=True,
         )
+
+    @app_commands.command(name="configbot", description="Abre as configurações do bot (atalho antigo).")
+    async def configbot(self, interaction: discord.Interaction):
+        await self._mostrar_configuracoes(interaction)
 
 
 async def setup(bot):
