@@ -291,11 +291,12 @@ class ConfigBotView(discord.ui.View):
         modal.pacotes.default = atuais
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Ativar/desativar modalidades", emoji="🔘", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Ativar/desativar pedidos por modalidade", emoji="🔘", style=discord.ButtonStyle.secondary, row=1)
     async def metodos(self, interaction: discord.Interaction, button: discord.ui.Button):
         config = await obter_configuracoes()
         await interaction.response.send_message(
-            "Clique em uma modalidade para ativar ou desativar:",
+            "Ative ou desative a abertura de pedidos/tickets por modalidade.\n"
+            "A calculadora continuará funcionando mesmo quando uma modalidade estiver desativada:",
             view=ToggleMetodosView(config),
             ephemeral=True,
         )
