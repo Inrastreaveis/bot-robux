@@ -32,6 +32,21 @@ class ConfirmarPedido(discord.ui.View):
     async def confirmar(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             config = await obter_configuracoes()
+
+            # A calculadora permanece disponível, mas não cria tickets quando
+            # a modalidade foi desativada no painel administrativo.
+            if not config.get("enabled_methods", {}).get(self.metodo, True):
+                for item in self.children:
+                    item.disabled = True
+                return await interaction.response.edit_message(
+                    content=(
+                        f"⚠️ A modalidade **{self.metodo}** está temporariamente desativada para novos pedidos.\n"
+                        "Você ainda pode usar a calculadora normalmente, mas a confirmação não abrirá um ticket."
+                    ),
+                    embed=None,
+                    view=self,
+                )
+
             categoria_id = int(config.get("category_tickets_id", 0) or 0)
             staff_role_id = int(config.get("staff_role_id", 0) or 0)
             if self.metodo == "Grupo" and self.desconto_aplicado:
