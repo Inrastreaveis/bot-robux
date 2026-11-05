@@ -28,9 +28,8 @@ DEFAULT_CONFIG = {
     "panel_description": (
         "Seja bem-vindo à **Campany**!\n\n"
         "Escolha uma das opções abaixo para abrir um atendimento.\n\n"
-        "🛒 **Comprar Robux**\n"
+        "🛒 **Comprar/Calcular Robux**\n"
         "👑 **Comprar Korblox**\n"
-        "🧮 **Calcular Robux**\n"
         "📚 **Tutorial Gamepass**\n"
         "🛠️ **Suporte Técnico**"
     ),
