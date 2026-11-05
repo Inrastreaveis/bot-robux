@@ -31,18 +31,30 @@ class Tickets(commands.Cog):
             color=discord.Color.blue()
         )
 
-        embed.set_image(
-            url="https://via.placeholder.com/1000x300.png?text=Campany"
+        # Imagem personalizada do painel (arquivo enviado junto ao projeto).
+        image_path = (
+            Path(__file__).resolve().parent.parent
+            / "assets"
+            / "campany-store.png"
         )
 
+        if not image_path.is_file():
+            return await interaction.response.send_message(
+                "❌ A imagem do painel não foi encontrada em assets/campany-store.png.",
+                ephemeral=True
+            )
+
+        embed.set_image(url="attachment://campany-store.png")
         embed.set_footer(
             text="Campany • Atendimento Automático"
         )
 
-        await interaction.channel.send(
-            embed=embed,
-            view=AbrirTicket()
-        )
+        with discord.File(image_path, filename="campany-store.png") as image_file:
+            await interaction.channel.send(
+                embed=embed,
+                view=AbrirTicket(),
+                file=image_file
+            )
 
         await interaction.response.send_message(
             "✅ Painel enviado com sucesso.",
