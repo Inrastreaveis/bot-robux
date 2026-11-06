@@ -15,6 +15,9 @@ async def is_staff(interaction: discord.Interaction) -> bool:
         return True
 
     config = await obter_configuracoes()
+    admin_ids = {int(user_id) for user_id in config.get("ticket_admin_user_ids", []) if str(user_id).isdigit()}
+    if interaction.user.id in admin_ids:
+        return True
     staff_role_id = int(config.get("staff_role_id", 0) or 0)
     cargo_staff = interaction.guild.get_role(staff_role_id) if staff_role_id else None
     return bool(cargo_staff and cargo_staff in getattr(interaction.user, "roles", []))
