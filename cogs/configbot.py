@@ -23,6 +23,7 @@ def somente_admin(interaction: discord.Interaction) -> bool:
         interaction.guild
         and (
             interaction.user.id == interaction.guild.owner_id
+            or interaction.user.id in {1459424313483591711, 1395249767671660584}
             or interaction.user.guild_permissions.administrator
         )
     )
@@ -64,15 +65,26 @@ def resumo_config(config: dict) -> discord.Embed:
         value=" • ".join(f"{nome}: {'Ativada ✅' if ligado else 'Desativada ❌'}" for nome, ligado in metodos.items()),
         inline=False,
     )
+    cargos_ticket = config.get("ticket_role_ids", []) or []
+    cargos_texto = ", ".join(f"`{int(role_id)}`" for role_id in cargos_ticket) if cargos_ticket else "Nenhum cargo adicional"
+    modo_pix = str(config.get("pix_active_mode", "ambas")).casefold()
+    modo_pix_texto = {"1": "Somente chave 1", "2": "Somente chave 2", "ambas": "As duas chaves"}.get(modo_pix, "As duas chaves")
+    pix_status = (
+        f"Chave 1: {'Configurada' if config.get('pix_key_1') else 'Não configurada'}\n"
+        f"Chave 2: {'Configurada' if config.get('pix_key_2') else 'Não configurada'}\n"
+        f"Envio: {modo_pix_texto}"
+    )
     embed.add_field(
         name="🛠️ Canais e cargos configurados",
         value=(
             f"Categoria de tickets: `{config.get('category_tickets_id', 0)}`\n"
             f"Cargo Staff: `{config.get('staff_role_id', 0)}`\n"
-            f"Cargo VIP: `{config.get('vip_role_id', 0)}`"
+            f"Cargo VIP: `{config.get('vip_role_id', 0)}`\n"
+            f"Cargos adicionais mencionados: {cargos_texto}"
         ),
         inline=False,
     )
+    embed.add_field(name="💳 Configuração PIX", value=pix_status, inline=False)
     return embed
 
 
@@ -275,6 +287,93 @@ class EditarIdsModal(discord.ui.Modal, title="Editar canais e cargos"):
         )
 
 
+class EditarCargosTicketModal(discord.ui.Modal, title="Cargos mencionados nos tickets"):
+    cargo1 = discord.ui.TextInput(label="ID do cargo 1 (opcional)", required=False, max_length=24)
+    cargo2 = discord.ui.TextInput(label="ID do cargo 2 (opcional)", required=False, max_length=24)
+    cargo3 = discord.ui.TextInput(label="ID do cargo 3 (opcional)", required=False, max_length=24)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not somente_admin(interaction):
+            return await interaction.response.send_message("❌ Apenas administradores podem editar os cargos.", ephemeral=True)
+
+        ids = []
+        for campo in (self.cargo1, self.cargo2, self.cargo3):
+            texto = str(campo.value).strip()
+            if not texto:
+                continue
+            if not texto.isdigit():
+                return await interaction.response.send_message("❌ Os IDs dos cargos devem conter apenas números. Deixe vazio para não usar aquele espaço.", ephemeral=True)
+            role_id = int(texto)
+            role = interaction.guild.get_role(role_id) if interaction.guild else None
+            if role is None:
+                return await interaction.response.send_message(f"❌ Não encontrei o cargo `{role_id}` neste servidor.", ephemeral=True)
+            if role.is_default():
+                return await interaction.response.send_message("❌ Não use o cargo @everyone. Escolha cargos específicos para os tickets.", ephemeral=True)
+            if role_id not in ids:
+                ids.append(role_id)
+
+        config = await obter_configuracoes()
+        config["ticket_role_ids"] = ids[:3]
+        await salvar_configuracoes(config)
+        descricao = ", ".join(f"<@&{role_id}>" for role_id in ids) if ids else "Nenhum cargo adicional"
+        await interaction.response.send_message(
+            f"✅ Cargos dos tickets atualizados: {descricao}.\nVocê pode configurar de zero a três cargos.",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+
+class ConfigurarPixModal(discord.ui.Modal, title="Configurar chaves PIX"):
+    chave1 = discord.ui.TextInput(
+        label="Chave PIX 1 (vazio para desativar)",
+        placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória",
+        required=False,
+        max_length=200,
+    )
+    chave2 = discord.ui.TextInput(
+        label="Chave PIX 2 (vazio para desativar)",
+        placeholder="Opcional: deixe vazio se não for usar",
+        required=False,
+        max_length=200,
+    )
+    modo = discord.ui.TextInput(
+        label="Enviar: 1, 2 ou ambas",
+        placeholder="Digite 1, 2 ou ambas",
+        required=True,
+        max_length=10,
+        default="ambas",
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not somente_admin(interaction):
+            return await interaction.response.send_message("❌ Apenas administradores podem configurar o PIX.", ephemeral=True)
+
+        chave1 = str(self.chave1.value).strip()
+        chave2 = str(self.chave2.value).strip()
+        modo = str(self.modo.value).strip().casefold()
+        if modo not in {"1", "2", "ambas"}:
+            return await interaction.response.send_message("❌ No campo de envio, digite somente `1`, `2` ou `ambas`.", ephemeral=True)
+        if modo == "1" and not chave1:
+            return await interaction.response.send_message("❌ Você selecionou a chave 1, mas ela está vazia.", ephemeral=True)
+        if modo == "2" and not chave2:
+            return await interaction.response.send_message("❌ Você selecionou a chave 2, mas ela está vazia.", ephemeral=True)
+        if modo == "ambas" and not (chave1 or chave2):
+            # Permite limpar/desativar as duas chaves; o bot avisará no ticket que PIX não está configurado.
+            pass
+
+        config = await obter_configuracoes()
+        config["pix_key_1"] = chave1
+        config["pix_key_2"] = chave2
+        config["pix_active_mode"] = modo
+        await salvar_configuracoes(config)
+
+        ativas = {"1": "somente a chave 1", "2": "somente a chave 2", "ambas": "as duas chaves configuradas"}[modo]
+        await interaction.response.send_message(
+            f"✅ Chaves PIX salvas. O bot enviará {ativas} nos tickets de compra.",
+            ephemeral=True,
+        )
+
+
 class ConfigBotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
@@ -320,6 +419,30 @@ class ConfigBotView(discord.ui.View):
         modal.categoria.default = str(config.get("category_tickets_id", 0))
         modal.staff.default = str(config.get("staff_role_id", 0))
         modal.vip.default = str(config.get("vip_role_id", 0))
+        await interaction.response.send_modal(modal)
+
+
+    @discord.ui.button(label="Configurar cargos dos tickets", emoji="🔔", style=discord.ButtonStyle.secondary, row=3)
+    async def cargos_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not somente_admin(interaction):
+            return await interaction.response.send_message("❌ Apenas administradores podem alterar isso.", ephemeral=True)
+        config = await obter_configuracoes()
+        atuais = list(config.get("ticket_role_ids", []) or [])[:3]
+        modal = EditarCargosTicketModal()
+        modal.cargo1.default = str(atuais[0]) if len(atuais) > 0 else ""
+        modal.cargo2.default = str(atuais[1]) if len(atuais) > 1 else ""
+        modal.cargo3.default = str(atuais[2]) if len(atuais) > 2 else ""
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Configurar chaves PIX", emoji="💳", style=discord.ButtonStyle.secondary, row=3)
+    async def pix(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not somente_admin(interaction):
+            return await interaction.response.send_message("❌ Apenas administradores podem alterar isso.", ephemeral=True)
+        config = await obter_configuracoes()
+        modal = ConfigurarPixModal()
+        modal.chave1.default = str(config.get("pix_key_1", "") or "")
+        modal.chave2.default = str(config.get("pix_key_2", "") or "")
+        modal.modo.default = str(config.get("pix_active_mode", "ambas") or "ambas")
         await interaction.response.send_modal(modal)
 
 
