@@ -57,7 +57,8 @@ async def criar_banco():
     status TEXT,
     criado_em TEXT,
     metodo_compra TEXT DEFAULT 'Outro',
-    robux_gamepass INTEGER DEFAULT 0
+    robux_gamepass INTEGER DEFAULT 0,
+    vip_use_counted INTEGER DEFAULT 0
 )
         """)
 
@@ -68,6 +69,12 @@ async def criar_banco():
             await db.execute("ALTER TABLE tickets ADD COLUMN metodo_compra TEXT DEFAULT 'Outro'")
         if "robux_gamepass" not in colunas_ticket:
             await db.execute("ALTER TABLE tickets ADD COLUMN robux_gamepass INTEGER DEFAULT 0")
+        if "vip_use_counted" not in colunas_ticket:
+            await db.execute("ALTER TABLE tickets ADD COLUMN vip_use_counted INTEGER DEFAULT 0")
+        # Os tickets antigos com desconto aplicado já contabilizavam o uso na confirmação.
+        await db.execute(
+            "UPDATE tickets SET vip_use_counted = 1 WHERE desconto_aplicado = 1 AND vip_use_counted = 0"
+        )
         # VIP
         await db.execute("""
         CREATE TABLE IF NOT EXISTS vip_uso (
@@ -444,7 +451,7 @@ async def atualizar_staff_remocao(db, user_id, valor, robux):
 
 async def registrar_uso_vip(user_id):
     async with aiosqlite.connect(str(DATABASE)) as db:
-        mes = datetime.now().strftime("%Y-%m")
+        mes = datetime.now().strftime("%m/%Y")
 
         await db.execute("""
         INSERT INTO vip_uso (user_id, mes, usos)
@@ -460,7 +467,7 @@ async def registrar_uso_vip(user_id):
 async def pegar_usos_vip(user_id):
     async with aiosqlite.connect(str(DATABASE)) as db:
 
-        mes = datetime.now().strftime("%Y-%m")
+        mes = datetime.now().strftime("%m/%Y")
 
         cursor = await db.execute("""
         SELECT usos
