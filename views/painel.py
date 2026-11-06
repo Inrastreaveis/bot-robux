@@ -8,6 +8,7 @@ from views.botoes import TicketButtons
 from views.calculadora_metodos import MetodoCompraView
 from views.tutorial_gamepass import TutorialGamepassView
 from views.verificar_roblox import VerificarRobloxModal
+from utils.ticket_support import enviar_pix_automatico, montar_mencoes_abertura, montar_overwrites_ticket
 
 
 def criar_embed_ticket(
@@ -53,12 +54,12 @@ class AbrirTicket(discord.ui.View):
     async def criar_ticket(
         self,
         interaction: discord.Interaction,
-        categoria_nome: str
+        categoria_nome: str,
+        metodo_compra: str = "Outro",
     ):
 
         config = await obter_configuracoes()
         categoria_id = int(config.get("category_tickets_id", 0) or 0)
-        staff_role_id = int(config.get("staff_role_id", 0) or 0)
         categoria = interaction.guild.get_channel(categoria_id)
 
         if categoria is None:
@@ -76,34 +77,10 @@ class AbrirTicket(discord.ui.View):
                     ephemeral=True
                 )
 
-        overwrites = {
+        if not isinstance(interaction.user, discord.Member):
+            return await interaction.response.send_message("❌ Não foi possível identificar seu membro no servidor.", ephemeral=True)
 
-            interaction.guild.default_role:
-                discord.PermissionOverwrite(
-                    view_channel=False
-                ),
-
-            interaction.user:
-                discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    attach_files=True,
-                    read_message_history=True
-                ),
-
-            interaction.guild.me:
-                discord.PermissionOverwrite(
-                    view_channel=True
-                )
-        }
-
-        staff_role = interaction.guild.get_role(staff_role_id) if staff_role_id else None
-        if staff_role:
-            overwrites[staff_role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True,
-            )
+        overwrites = await montar_overwrites_ticket(interaction.guild, interaction.user, config)
 
         canal = await interaction.guild.create_text_channel(
             name=f"ticket-{interaction.user.name}",
@@ -121,18 +98,19 @@ class AbrirTicket(discord.ui.View):
             vip=False,
             desconto=0,
             desconto_aplicado=False,
-            metodo_compra="Outro",
+            metodo_compra=metodo_compra,
             robux_gamepass=0,
+            vip_use_counted=False,
         )
 
+        mencoes, allowed_mentions = montar_mencoes_abertura(interaction.guild, interaction.user, config)
         await canal.send(
-            content=interaction.user.mention,
-            embed=criar_embed_ticket(
-                interaction.user,
-                categoria_nome
-            ),
-            view=TicketButtons()
+            content=mencoes,
+            embed=criar_embed_ticket(interaction.user, categoria_nome),
+            view=TicketButtons(),
+            allowed_mentions=allowed_mentions,
         )
+        await enviar_pix_automatico(canal, config, 0, metodo_compra)
 
         await interaction.response.send_message(
             f"✅ Ticket criado com sucesso: {canal.mention}",
@@ -183,7 +161,8 @@ class AbrirTicket(discord.ui.View):
 
         await self.criar_ticket(
             interaction,
-            "👑 Comprar Korblox"
+            "👑 Comprar Korblox",
+            metodo_compra="Korblox",
         )
 
     # ==========================
