@@ -9,6 +9,8 @@ from discord import app_commands
 from views.painel import AbrirTicket
 from utils.permissions import is_staff
 from database.configuracoes import obter_configuracoes
+from database.tickets import buscar_ticket
+from utils.ticket_support import PURCHASE_METHODS, eh_anexo_comprovante, mencoes_administracao
 
 
 logger = logging.getLogger(__name__)
@@ -203,6 +205,42 @@ class Tickets(commands.Cog):
                 logger.exception(
                     "[PAINEL] Não foi possível responder ao Discord."
                 )
+
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """Notifica os dois responsáveis quando o cliente envia comprovante no ticket de compra."""
+        if message.author.bot or message.guild is None or not message.attachments:
+            return
+
+        try:
+            ticket = await buscar_ticket(message.channel.id)
+            if ticket is None:
+                return
+
+            cliente_id = int(ticket[1])
+            metodo = ticket[12] if len(ticket) > 12 and ticket[12] else "Outro"
+            status = str(ticket[10] or "")
+            if message.author.id != cliente_id or metodo not in PURCHASE_METHODS or status.casefold() == "fechado":
+                return
+
+            comprovantes = [anexo for anexo in message.attachments if eh_anexo_comprovante(anexo)]
+            if not comprovantes:
+                return
+
+            config = await obter_configuracoes()
+            mencoes, allowed_mentions = mencoes_administracao(config)
+            nomes = discord.utils.escape_mentions(", ".join(anexo.filename for anexo in comprovantes)).replace("`", "")
+            texto = (
+                f"📎 **Comprovante recebido!**\n"
+                f"Cliente: **{discord.utils.escape_mentions(message.author.display_name)}** (`{message.author.id}`)\n"
+                f"Arquivo(s): `{nomes[:500]}`\n"
+                f"{mencoes}"
+            ).strip()
+            await message.channel.send(content=texto, allowed_mentions=allowed_mentions)
+        except Exception:
+            logger.exception("[TICKETS] Erro ao processar possível comprovante enviado no ticket.")
+
 
 
 async def setup(bot):
