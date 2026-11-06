@@ -8,10 +8,11 @@ from utils.permissions import is_staff
 from views.modal_venda import RegistrarVenda
 from views.avaliacao import AvaliacaoView
 
-from database.vip import pode_usar, registrar_uso, obter_usos
+from database.vip import obter_usos
 from database.configuracoes import obter_configuracoes
-from database.tickets import atualizar_desconto_vip_ticket
+from database.tickets import aplicar_desconto_vip_ticket_atomic
 from utils.calculos_robux import calcular_desconto_vip, formatar_reais
+from utils.ticket_support import enviar_pix_automatico
 from database.tickets import (
     assumir_ticket,
     buscar_ticket,
@@ -111,6 +112,11 @@ class TicketButtons(discord.ui.View):
             )
 
         cliente = interaction.guild.get_member(ticket[1])
+        if cliente is None:
+            try:
+                cliente = await interaction.guild.fetch_member(ticket[1])
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                cliente = None
 
         if cliente is None:
             return await interaction.response.send_message(
@@ -135,43 +141,64 @@ class TicketButtons(discord.ui.View):
                 ephemeral=True
             )
 
-        # Se o desconto já veio aplicado pela calculadora, o uso foi contado
-        # na confirmação. Não permite aplicar nem contabilizar pela segunda vez.
-        if len(ticket) > 9 and bool(ticket[9]):
+        # O desconto e o uso mensal ficam vinculados ao ticket. Se a calculadora
+        # já contabilizou o uso, ou se a Staff já aplicou antes, não há nova cobrança.
+        if (len(ticket) > 9 and bool(ticket[9])) or (len(ticket) > 14 and bool(ticket[14])):
             button.disabled = True
             button.label = "👑 VIP Já Aplicado"
             await interaction.response.edit_message(view=self)
             return await interaction.followup.send(
-                "✅ O desconto VIP já foi aplicado na calculadora e contabilizado na confirmação do pedido.",
+                "✅ O desconto VIP deste ticket já foi aplicado e contabilizado. Um novo uso só poderá ocorrer em outro ticket, respeitando o limite mensal.",
                 ephemeral=True,
             )
 
-        if not await pode_usar(cliente.id):
-            config = await obter_configuracoes()
-            limite = int(config.get("vip_uses_per_month", 2))
+        config = await obter_configuracoes()
+        limite = int(config.get("vip_uses_per_month", 2))
+        desconto_dec, total_dec = calcular_desconto_vip(Decimal(str(ticket[6])), config)
+        novo_valor = float(total_dec)
+        resultado = await aplicar_desconto_vip_ticket_atomic(
+            canal_id=interaction.channel.id,
+            novo_valor=novo_valor,
+            desconto=float(desconto_dec),
+            limite=limite,
+        )
+
+        if resultado == "limit_reached":
             usos = await obter_usos(cliente.id)
             return await interaction.response.send_message(
                 f"❌ Este cliente já utilizou os {limite} descontos disponíveis neste mês ({usos}/{limite}).",
-                ephemeral=True
+                ephemeral=True,
             )
-
-        config = await obter_configuracoes()
-        desconto_dec, total_dec = calcular_desconto_vip(Decimal(str(ticket[6])), config)
-        novo_valor = float(total_dec)
-        await atualizar_desconto_vip_ticket(
-            interaction.channel.id,
-            novo_valor,
-            float(desconto_dec),
-        )
-
-        await registrar_uso(cliente.id)
+        if resultado == "already_used":
+            button.disabled = True
+            button.label = "👑 VIP Já Aplicado"
+            await interaction.response.edit_message(view=self)
+            return await interaction.followup.send("✅ O uso VIP deste ticket já havia sido contabilizado.", ephemeral=True)
+        if resultado != "applied":
+            return await interaction.response.send_message("❌ Não foi possível atualizar este ticket. Atualize a página e tente novamente.", ephemeral=True)
 
         button.disabled = True
         button.label = "👑 VIP Utilizado"
-        await interaction.response.edit_message(view=self)
+        embed = interaction.message.embeds[0] if interaction.message.embeds else None
+        if embed is not None:
+            for index, field in enumerate(embed.fields):
+                if field.name in {"💰 Valor do pedido", "Valor do pedido", "💰 Total"}:
+                    embed.set_field_at(index, name=field.name, value=formatar_reais(novo_valor), inline=field.inline)
+                    break
+            embed.add_field(name="👑 Desconto VIP aplicado pela Staff", value=f"-{formatar_reais(float(desconto_dec))}", inline=True)
+        await interaction.response.edit_message(embed=embed, view=self)
+        # O PIX original foi enviado na abertura do ticket; reenvia as instruções
+        # com o novo total para que o cliente não pague o valor sem desconto.
+        await enviar_pix_automatico(
+            interaction.channel,
+            config,
+            novo_valor,
+            metodo,
+            atualizacao=True,
+        )
         await interaction.followup.send(
-            f"✅ Uso do desconto VIP registrado.\nValor do pedido: **{formatar_reais(novo_valor)}**",
-            ephemeral=True
+            f"✅ Desconto VIP aplicado e contabilizado neste ticket.\nValor atualizado: **{formatar_reais(novo_valor)}**. As instruções PIX atualizadas foram enviadas no canal.",
+            ephemeral=True,
         )
 
     @discord.ui.button(
