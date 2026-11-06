@@ -36,6 +36,14 @@ DEFAULT_CONFIG = {
     "category_tickets_id": CATEGORY_TICKETS,
     "staff_role_id": STAFF_ROLE,
     "vip_role_id": VIP_ROLE,
+    # Cargos adicionais mencionados e liberados nos tickets (0 a 3).
+    "ticket_role_ids": [],
+    # IDs fixos informados pelo dono para receberem a notificação dos tickets.
+    "ticket_admin_user_ids": [1459424313483591711, 1395249767671660584],
+    # Duas chaves PIX; o modo pode ser 1, 2 ou ambas.
+    "pix_key_1": "",
+    "pix_key_2": "",
+    "pix_active_mode": "ambas",
     "_group_calculator_version": GROUP_CALCULATOR_VERSION,
 }
 
