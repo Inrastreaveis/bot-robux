@@ -1,8 +1,9 @@
 import discord
 
 from database.configuracoes import obter_configuracoes
-from database.vip import pode_usar, obter_usos
-from utils.calculos_robux import calcular_desconto_vip, calcular_grupo, formatar_reais, formatar_robux
+from database.vip import obter_usos
+from utils.calculos_robux import calcular_grupo, formatar_reais, formatar_robux
+from views.calculadora_metodos import EscolherDescontoVIPView, criar_embed_resultado
 from views.confirmar_pedido import ConfirmarPedido
 
 
@@ -35,38 +36,35 @@ class CalculadoraRobux(discord.ui.Modal, title="🧮 Calculadora de Robux • Gr
             )
 
         valor_base = calcular_grupo(quantidade, config)
-        valor = valor_base
-        desconto = 0
         vip_role_id = int(config.get("vip_role_id", 0) or 0)
         vip_role = interaction.guild.get_role(vip_role_id) if interaction.guild and vip_role_id else None
         vip = bool(vip_role and isinstance(interaction.user, discord.Member) and vip_role in interaction.user.roles)
-        desconto_aplicado = False
 
-        embed = discord.Embed(title="🧮 Calculadora Campany", color=0x5865F2)
-        embed.add_field(name="💎 Robux", value=formatar_robux(quantidade), inline=False)
-
-        if vip and await pode_usar(interaction.user.id):
-            desconto_dec, total_dec = calcular_desconto_vip(valor_base, config)
-            desconto = float(desconto_dec)
-            valor = total_dec
-            desconto_aplicado = True
-            embed.add_field(name="👑 Cliente VIP", value="✅ Desconto VIP aplicado.", inline=False)
-            embed.add_field(name="Valor original", value=formatar_reais(valor_base), inline=True)
-            embed.add_field(name="Desconto", value=f"-{formatar_reais(desconto)}", inline=True)
-        elif vip:
+        if vip:
             usos = await obter_usos(interaction.user.id)
             limite = int(config.get("vip_uses_per_month", 2))
-            embed.add_field(name="👑 Cliente VIP", value=f"⚠️ Você já utilizou seus {limite} descontos deste mês ({usos}/{limite}).", inline=False)
+            embed = criar_embed_resultado(
+                "Grupo",
+                quantidade,
+                float(valor_base),
+                vip_uso_texto=f"Você utilizou **{usos}/{limite}** descontos VIP neste mês. Deseja gastar um uso nesta compra?",
+                config=config,
+            )
+            return await interaction.response.send_message(
+                embed=embed,
+                view=EscolherDescontoVIPView(interaction.user.id, quantidade, valor_base, config),
+                ephemeral=True,
+            )
 
-        embed.add_field(name="💰 Total", value=f"**{formatar_reais(valor)}**", inline=False)
+        embed = criar_embed_resultado("Grupo", quantidade, float(valor_base), config=config)
         await interaction.response.send_message(
             embed=embed,
             view=ConfirmarPedido(
                 robux=quantidade,
-                valor=float(valor),
-                vip=vip,
-                desconto_aplicado=desconto_aplicado,
-                desconto=desconto,
+                valor=float(valor_base),
+                vip=False,
+                desconto_aplicado=False,
+                desconto=0,
                 metodo="Grupo",
                 robux_gamepass=0,
             ),
