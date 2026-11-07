@@ -5,6 +5,7 @@ from __future__ import annotations
 import discord
 
 from utils.calculos_robux import formatar_reais
+from views.pix import PixCopyView
 
 
 PURCHASE_METHODS = {"Grupo", "Plus", "Gamepass", "Korblox"}
@@ -167,6 +168,7 @@ def montar_mencoes_abertura(
 
 
 def chaves_pix_ativas(config):
+    """Retorna os índices e valores das chaves PIX habilitadas."""
     chave1 = str(config.get("pix_key_1", "") or "").strip()
     chave2 = str(config.get("pix_key_2", "") or "").strip()
 
@@ -175,18 +177,18 @@ def chaves_pix_ativas(config):
     ).strip().casefold()
 
     if modo == "1":
-        return [("Chave PIX 1", chave1)] if chave1 else []
+        return [(1, chave1)] if chave1 else []
 
     if modo == "2":
-        return [("Chave PIX 2", chave2)] if chave2 else []
+        return [(2, chave2)] if chave2 else []
 
     selecionadas = []
 
     if chave1:
-        selecionadas.append(("Chave PIX 1", chave1))
+        selecionadas.append((1, chave1))
 
     if chave2:
-        selecionadas.append(("Chave PIX 2", chave2))
+        selecionadas.append((2, chave2))
 
     return selecionadas
 
@@ -220,6 +222,14 @@ async def enviar_pix_automatico(
             "o valor neste ticket antes de pagar."
         )
 
+    recebedor = " ".join(str(config.get("pix_receiver_name", "") or "").split())
+    if recebedor:
+        recebedor = discord.utils.escape_mentions(
+            discord.utils.escape_markdown(recebedor)
+        )
+    else:
+        recebedor = "Não informado — solicite confirmação à equipe."
+
     linhas = ["💳 **PAGAMENTO VIA PIX**"]
 
     if atualizacao:
@@ -230,22 +240,29 @@ async def enviar_pix_automatico(
 
     linhas.extend([
         texto_valor,
-        "Efetue o pagamento para **apenas uma** das chaves abaixo."
+        "Efetue o pagamento para **apenas uma** das chaves abaixo.",
+        f"**Nome do recebedor:** {recebedor}",
     ])
 
-    for nome, chave in chaves:
+    for indice, chave in chaves:
         chave_segura = chave.replace("`", "")
         linhas.append(
-            f"**{nome}:**\n```{chave_segura}```"
+            f"**Chave PIX {indice}:**\n```{chave_segura}```"
         )
 
-    linhas.append(
+    linhas.extend([
         "📎 Depois de realizar o pagamento, envie o "
         "**comprovante neste ticket** como imagem ou PDF.\n"
-        "A administração será notificada automaticamente."
-    )
+        "A administração será notificada automaticamente.",
+        "🎮 **Depois de enviar o comprovante, informe também seu username do Roblox neste ticket.**\n"
+        "Envie seu nome de usuário (username), não apenas o nome de exibição, e confira se está escrito corretamente."
+    ])
 
-    await canal.send("\n\n".join(linhas))
+    await canal.send(
+        content="\n\n".join(linhas),
+        view=PixCopyView(indices_chaves=[indice for indice, _ in chaves]),
+        allowed_mentions=discord.AllowedMentions.none(),
+    )
 
 
 def eh_anexo_comprovante(attachment):
