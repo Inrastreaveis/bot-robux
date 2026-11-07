@@ -8,7 +8,7 @@ from discord import app_commands
 
 from views.painel import AbrirTicket
 from utils.permissions import is_staff
-from database.configuracoes import obter_configuracoes
+from database.configuracoes import obter_configuracoes, salvar_configuracoes
 from database.tickets import buscar_ticket
 from utils.ticket_support import PURCHASE_METHODS, eh_anexo_comprovante, mencoes_administracao
 
@@ -206,6 +206,49 @@ class Tickets(commands.Cog):
                     "[PAINEL] Não foi possível responder ao Discord."
                 )
 
+
+
+    @app_commands.command(
+        name="canalavaliacao",
+        description="Define onde serão publicadas as avaliações dos tickets de suporte.",
+    )
+    @app_commands.describe(canal="Canal de texto para receber as avaliações de suporte.")
+    async def canalavaliacao(
+        self,
+        interaction: discord.Interaction,
+        canal: discord.TextChannel,
+    ):
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                "❌ Este comando só pode ser usado dentro de um servidor.",
+                ephemeral=True,
+            )
+
+        administradores_fixos = {
+            1459424313483591711,
+            1395249767671660584,
+        }
+        permitido = (
+            interaction.user.id == interaction.guild.owner_id
+            or interaction.user.id in administradores_fixos
+            or interaction.user.guild_permissions.administrator
+        )
+        if not permitido:
+            return await interaction.response.send_message(
+                "❌ Apenas o dono ou administradores do servidor podem configurar o canal de avaliações.",
+                ephemeral=True,
+            )
+
+        config = await obter_configuracoes()
+        config["support_reviews_channel_id"] = canal.id
+        await salvar_configuracoes(config)
+
+        await interaction.response.send_message(
+            f"✅ Canal de avaliações do suporte configurado: {canal.mention}.\n"
+            "A partir de agora, as avaliações dos tickets de **Suporte Técnico** serão publicadas nesse canal. "
+            "As avaliações de compras continuam no canal de avaliações já utilizado.",
+            ephemeral=True,
+        )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
