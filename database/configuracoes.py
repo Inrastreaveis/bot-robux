@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     # IDs fixos informados pelo dono para receberem a notificação dos tickets.
     "ticket_admin_user_ids": [1459424313483591711, 1395249767671660584],
     # Duas chaves PIX; o modo pode ser 1, 2 ou ambas.
+    "pix_receiver_name": "",
     "pix_key_1": "",
     "pix_key_2": "",
     "pix_active_mode": "ambas",
