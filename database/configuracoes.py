@@ -40,6 +40,8 @@ DEFAULT_CONFIG = {
     "ticket_role_ids": [],
     # IDs fixos informados pelo dono para receberem a notificação dos tickets.
     "ticket_admin_user_ids": [1459424313483591711, 1395249767671660584],
+    # Canal exclusivo para avaliações dos tickets de suporte técnico.
+    "support_reviews_channel_id": 0,
     # Duas chaves PIX; o modo pode ser 1, 2 ou ambas.
     "pix_receiver_name": "",
     "pix_key_1": "",
