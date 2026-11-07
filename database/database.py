@@ -127,9 +127,19 @@ async def criar_banco():
             valor REAL,
             estrelas INTEGER,
             comentario TEXT,
-            data TEXT
+            data TEXT,
+            categoria TEXT DEFAULT 'Compra'
         )
         """)
+
+        # Migração: identifica avaliações de suporte sem afetar o histórico antigo.
+        cursor = await db.execute("PRAGMA table_info(avaliacoes)")
+        colunas_avaliacao = {linha[1] for linha in await cursor.fetchall()}
+        if "categoria" not in colunas_avaliacao:
+            await db.execute(
+                "ALTER TABLE avaliacoes ADD COLUMN categoria TEXT DEFAULT 'Compra'"
+            )
+
         await db.commit()
 
     print("✅ Banco de dados criado com sucesso!")
@@ -495,34 +505,24 @@ async def registrar_avaliacao(
     valor,
     estrelas,
     comentario,
-    data
+    data,
+    categoria="Compra",
 ):
-
     await db.execute(
         """
         INSERT INTO avaliacoes(
-
             canal_id,
-
             cliente_id,
-
             atendente_id,
-
             fechado_por,
-
             robux,
-
             valor,
-
             estrelas,
-
             comentario,
-
-            data
-
+            data,
+            categoria
         )
-
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             canal_id,
@@ -533,11 +533,19 @@ async def registrar_avaliacao(
             valor,
             estrelas,
             comentario,
-            data
-        )
+            data,
+            categoria,
+        ),
     )
-
     await db.commit()
+
+
+async def avaliacao_existe(db, canal_id):
+    cursor = await db.execute(
+        "SELECT 1 FROM avaliacoes WHERE canal_id = ? LIMIT 1",
+        (canal_id,),
+    )
+    return await cursor.fetchone() is not None
 
 
 async def listar_avaliacoes(db, limite=20):
