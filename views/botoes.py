@@ -18,8 +18,171 @@ from database.tickets import (
     buscar_ticket,
     fechar_ticket,
     registrar_fechamento,
-    atualizar_valores_ticket
+    atualizar_valores_ticket,
+    atualizar_status_ticket,
 )
+
+
+async def _buscar_cliente(guild: discord.Guild, cliente_id: int):
+    cliente = guild.get_member(cliente_id)
+    if cliente is not None:
+        return cliente
+    try:
+        return await guild.fetch_member(cliente_id)
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        return None
+
+
+async def _finalizar_ticket_com_avaliacao(
+    interaction: discord.Interaction,
+    view: discord.ui.View,
+):
+    ticket = await buscar_ticket(interaction.channel.id)
+    if ticket is None:
+        return await interaction.response.send_message(
+            "❌ Não foi possível localizar este ticket no banco de dados.",
+            ephemeral=True,
+        )
+
+    await registrar_fechamento(interaction.channel.id, interaction.user.id)
+
+    cliente_id = int(ticket[1])
+    cliente = await _buscar_cliente(interaction.guild, cliente_id)
+    if cliente is not None:
+        await interaction.channel.set_permissions(
+            cliente,
+            view_channel=True,
+            send_messages=True,
+            attach_files=True,
+            read_message_history=True,
+            add_reactions=True,
+        )
+
+    # Mantém o comportamento atual: quem encerrou não continua conversando no ticket.
+    await interaction.channel.set_permissions(
+        interaction.user,
+        send_messages=False,
+    )
+
+    eh_suporte = "suporte" in str(ticket[4] or "").casefold()
+    titulo = "⭐ Avaliação do Suporte" if eh_suporte else "⭐ Avaliação do Atendimento"
+    texto = (
+        "Seu atendimento de suporte foi finalizado.\n\n"
+        "Conte como foi a experiência com nossa equipe.\n\n"
+        "Escolha uma nota e, se desejar, deixe um comentário."
+        if eh_suporte
+        else "Seu atendimento foi finalizado.\n\n"
+        "Clique no botão abaixo para avaliar o atendimento.\n\n"
+        "Após sua avaliação, este ticket será encerrado automaticamente."
+    )
+
+    embed = discord.Embed(
+        title=titulo,
+        description=texto,
+        color=discord.Color.gold(),
+    )
+    embed.set_footer(text="Campany • Sua opinião é muito importante ❤️")
+
+    # Atualiza o painel principal e bloqueia ações depois do encerramento.
+    embed_ticket = interaction.message.embeds[0].copy() if interaction.message.embeds else None
+    if embed_ticket is not None:
+        linhas = (embed_ticket.description or "").splitlines()
+        status_atualizado = False
+        for indice, linha in enumerate(linhas):
+            if linha.startswith("📌 **Status:**"):
+                linhas[indice] = "📌 **Status:** 🔴 Fechado"
+                status_atualizado = True
+                break
+        if not status_atualizado:
+            linhas.append("📌 **Status:** 🔴 Fechado")
+        embed_ticket.description = "\n".join(linhas)
+        embed_ticket.color = discord.Color.dark_grey()
+
+    for item in view.children:
+        item.disabled = True
+
+    await interaction.response.edit_message(
+        embed=embed_ticket,
+        view=view,
+    )
+    await interaction.followup.send(
+        "✅ Ticket encerrado. Aguardando a avaliação do cliente.",
+        ephemeral=True,
+    )
+    await interaction.channel.send(
+        content=cliente.mention if cliente else f"<@{cliente_id}>",
+        embed=embed,
+        view=AvaliacaoView(),
+        allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+    )
+
+
+async def _alterar_status_suporte(
+    interaction: discord.Interaction,
+    view: discord.ui.View,
+    status: str,
+    texto_status: str,
+    cor: discord.Colour,
+    button: discord.ui.Button | None = None,
+):
+    if not await is_staff(interaction):
+        return await interaction.response.send_message(
+            "❌ Apenas a equipe de suporte pode alterar o status deste ticket.",
+            ephemeral=True,
+        )
+
+    ticket = await buscar_ticket(interaction.channel.id)
+    if ticket is None:
+        return await interaction.response.send_message(
+            "❌ Ticket não encontrado.",
+            ephemeral=True,
+        )
+
+    if status == "Em Atendimento":
+        await assumir_ticket(interaction.channel.id, interaction.user.id)
+    else:
+        await atualizar_status_ticket(
+            interaction.channel.id,
+            status,
+            staff_id=interaction.user.id,
+        )
+
+    ticket_atualizado = await buscar_ticket(interaction.channel.id)
+    atendente_id = (ticket_atualizado[2] if ticket_atualizado else None) or interaction.user.id
+    atendente = interaction.guild.get_member(atendente_id)
+    mencao_atendente = atendente.mention if atendente else f"<@{atendente_id}>"
+
+    embed = interaction.message.embeds[0].copy() if interaction.message.embeds else discord.Embed(
+        title="🎫 Ticket de Suporte"
+    )
+    linhas = (embed.description or "").splitlines()
+    status_atualizado = False
+    atendente_atualizado = False
+
+    for indice, linha in enumerate(linhas):
+        if linha.startswith("📌 **Status:**"):
+            linhas[indice] = f"📌 **Status:** {texto_status}"
+            status_atualizado = True
+        elif linha.startswith("👮 **Atendente:**"):
+            linhas[indice] = f"👮 **Atendente:** {mencao_atendente}"
+            atendente_atualizado = True
+
+    if not status_atualizado:
+        linhas.append(f"📌 **Status:** {texto_status}")
+    if not atendente_atualizado:
+        linhas.append(f"👮 **Atendente:** {mencao_atendente}")
+
+    embed.description = "\n".join(linhas)
+    embed.color = cor
+    if button is not None:
+        button.disabled = True
+        button.label = "✅ Atendimento assumido"
+
+    await interaction.response.edit_message(embed=embed, view=view)
+    await interaction.followup.send(
+        f"✅ Status atualizado: **{status}**.",
+        ephemeral=True,
+    )
 
 
 class TicketButtons(discord.ui.View):
@@ -271,60 +434,116 @@ class TicketButtons(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button
     ):
-
         if not await is_staff(interaction):
             return await interaction.response.send_message(
                 "❌ Apenas a Staff pode fechar tickets.",
-                ephemeral=True
+                ephemeral=True,
             )
+        await _finalizar_ticket_com_avaliacao(interaction, self)
 
-        await registrar_fechamento(
-            interaction.channel.id,
-            interaction.user.id
+
+class SupportTicketButtons(discord.ui.View):
+    """Controles específicos para tickets da categoria Suporte Técnico."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Assumir Atendimento",
+        emoji="👮",
+        style=discord.ButtonStyle.primary,
+        custom_id="support_assumir_ticket",
+        row=0,
+    )
+    async def assumir(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        await _alterar_status_suporte(
+            interaction,
+            self,
+            status="Em Atendimento",
+            texto_status="🟡 Em Atendimento",
+            cor=discord.Color.blurple(),
+            button=button,
         )
 
-        cliente = None
+    @discord.ui.button(
+        label="Aguardar Cliente",
+        emoji="⏳",
+        style=discord.ButtonStyle.secondary,
+        custom_id="support_aguardar_cliente",
+        row=0,
+    )
+    async def aguardar_cliente(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        await _alterar_status_suporte(
+            interaction,
+            self,
+            status="Aguardando Cliente",
+            texto_status="🟠 Aguardando cliente",
+            cor=discord.Color.orange(),
+        )
 
-        if interaction.channel.topic and interaction.channel.topic.isdigit():
-            cliente = interaction.guild.get_member(
-                int(interaction.channel.topic)
+    @discord.ui.button(
+        label="Em Análise",
+        emoji="🔎",
+        style=discord.ButtonStyle.primary,
+        custom_id="support_em_analise",
+        row=0,
+    )
+    async def em_analise(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        await _alterar_status_suporte(
+            interaction,
+            self,
+            status="Em Análise",
+            texto_status="🔵 Em análise",
+            cor=discord.Color.blue(),
+        )
+
+    @discord.ui.button(
+        label="Marcar como Resolvido",
+        emoji="✅",
+        style=discord.ButtonStyle.success,
+        custom_id="support_resolvido",
+        row=1,
+    )
+    async def resolvido(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        await _alterar_status_suporte(
+            interaction,
+            self,
+            status="Resolvido",
+            texto_status="🟢 Resolvido",
+            cor=discord.Color.green(),
+        )
+
+    @discord.ui.button(
+        label="Fechar Ticket",
+        emoji="🔒",
+        style=discord.ButtonStyle.danger,
+        custom_id="support_fechar_ticket",
+        row=1,
+    )
+    async def fechar(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        if not await is_staff(interaction):
+            return await interaction.response.send_message(
+                "❌ Apenas a equipe de suporte pode fechar tickets.",
+                ephemeral=True,
             )
-
-        if cliente:
-            await interaction.channel.set_permissions(
-                cliente,
-                send_messages=True,
-                add_reactions=True,
-                view_channel=True
-            )
-
-        # Remove a permissão da Staff enviar mensagens
-        await interaction.channel.set_permissions(
-            interaction.user,
-            send_messages=False
-        )
-
-        embed = discord.Embed(
-            title="⭐ Avaliação do Atendimento",
-            description=(
-                f"{cliente.mention}, seu atendimento foi finalizado.\n\n"
-                "Clique no botão abaixo para avaliar o atendimento.\n\n"
-                "Após sua avaliação o ticket será encerrado automaticamente."
-            ),
-            color=discord.Color.gold()
-        )
-
-        embed.set_footer(
-            text="Campany • Obrigado pela preferência ❤️"
-        )
-
-        await interaction.response.send_message(
-            "✅ Ticket encerrado. Aguardando avaliação do cliente.",
-            ephemeral=True
-        )
-
-        await interaction.channel.send(
-            content=cliente.mention,
-            embed=embed,
-            view=AvaliacaoView()
-        )
+        await _finalizar_ticket_com_avaliacao(interaction, self)
