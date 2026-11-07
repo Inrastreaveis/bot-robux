@@ -69,7 +69,10 @@ def resumo_config(config: dict) -> discord.Embed:
     cargos_texto = ", ".join(f"`{int(role_id)}`" for role_id in cargos_ticket) if cargos_ticket else "Nenhum cargo adicional"
     modo_pix = str(config.get("pix_active_mode", "ambas")).casefold()
     modo_pix_texto = {"1": "Somente chave 1", "2": "Somente chave 2", "ambas": "As duas chaves"}.get(modo_pix, "As duas chaves")
+    recebedor_pix = str(config.get("pix_receiver_name", "") or "").strip()
+    recebedor_pix = discord.utils.escape_markdown(recebedor_pix) if recebedor_pix else "Não configurado"
     pix_status = (
+        f"Recebedor: **{recebedor_pix}**\n"
         f"Chave 1: {'Configurada' if config.get('pix_key_1') else 'Não configurada'}\n"
         f"Chave 2: {'Configurada' if config.get('pix_key_2') else 'Não configurada'}\n"
         f"Envio: {modo_pix_texto}"
@@ -324,6 +327,12 @@ class EditarCargosTicketModal(discord.ui.Modal, title="Cargos mencionados nos ti
 
 
 class ConfigurarPixModal(discord.ui.Modal, title="Configurar chaves PIX"):
+    recebedor = discord.ui.TextInput(
+        label="Nome de quem vai receber",
+        placeholder="Nome completo do titular da chave PIX",
+        required=False,
+        max_length=100,
+    )
     chave1 = discord.ui.TextInput(
         label="Chave PIX 1 (vazio para desativar)",
         placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória",
@@ -348,28 +357,33 @@ class ConfigurarPixModal(discord.ui.Modal, title="Configurar chaves PIX"):
         if not somente_admin(interaction):
             return await interaction.response.send_message("❌ Apenas administradores podem configurar o PIX.", ephemeral=True)
 
+        recebedor = str(self.recebedor.value).strip()
         chave1 = str(self.chave1.value).strip()
         chave2 = str(self.chave2.value).strip()
         modo = str(self.modo.value).strip().casefold()
+
         if modo not in {"1", "2", "ambas"}:
             return await interaction.response.send_message("❌ No campo de envio, digite somente `1`, `2` ou `ambas`.", ephemeral=True)
         if modo == "1" and not chave1:
             return await interaction.response.send_message("❌ Você selecionou a chave 1, mas ela está vazia.", ephemeral=True)
         if modo == "2" and not chave2:
             return await interaction.response.send_message("❌ Você selecionou a chave 2, mas ela está vazia.", ephemeral=True)
-        if modo == "ambas" and not (chave1 or chave2):
-            # Permite limpar/desativar as duas chaves; o bot avisará no ticket que PIX não está configurado.
-            pass
+        if (chave1 or chave2) and not recebedor:
+            return await interaction.response.send_message(
+                "❌ Informe o nome de quem receberá o PIX antes de salvar as chaves.",
+                ephemeral=True,
+            )
 
         config = await obter_configuracoes()
+        config["pix_receiver_name"] = recebedor
         config["pix_key_1"] = chave1
         config["pix_key_2"] = chave2
         config["pix_active_mode"] = modo
         await salvar_configuracoes(config)
 
-        ativas = {"1": "somente a chave 1", "2": "somente a chave 2", "ambas": "as duas chaves configuradas"}[modo]
+        ativas = {"1": "somente a chave 1", "2": "somente a chave 2", "ambas": "as chaves configuradas"}[modo]
         await interaction.response.send_message(
-            f"✅ Chaves PIX salvas. O bot enviará {ativas} nos tickets de compra.",
+            f"✅ Nome do recebedor e chaves PIX salvos. O bot enviará {ativas} nos tickets de compra.",
             ephemeral=True,
         )
 
@@ -440,6 +454,7 @@ class ConfigBotView(discord.ui.View):
             return await interaction.response.send_message("❌ Apenas administradores podem alterar isso.", ephemeral=True)
         config = await obter_configuracoes()
         modal = ConfigurarPixModal()
+        modal.recebedor.default = str(config.get("pix_receiver_name", "") or "")
         modal.chave1.default = str(config.get("pix_key_1", "") or "")
         modal.chave2.default = str(config.get("pix_key_2", "") or "")
         modal.modo.default = str(config.get("pix_active_mode", "ambas") or "ambas")
