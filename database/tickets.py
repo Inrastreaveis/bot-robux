@@ -79,6 +79,31 @@ async def assumir_ticket(canal_id: int, staff_id: int):
         await db.commit()
 
 
+async def atualizar_status_ticket(
+    canal_id: int,
+    status: str,
+    staff_id: int | None = None,
+):
+    """Atualiza o status e atribui o primeiro atendente que movimentar o ticket."""
+    async with aiosqlite.connect(str(DATABASE)) as db:
+        if staff_id is None:
+            cursor = await db.execute(
+                "UPDATE tickets SET status = ? WHERE canal_id = ?",
+                (status, canal_id),
+            )
+        else:
+            cursor = await db.execute(
+                """
+                UPDATE tickets
+                SET status = ?, staff_id = COALESCE(staff_id, ?)
+                WHERE canal_id = ?
+                """,
+                (status, staff_id, canal_id),
+            )
+        await db.commit()
+        return cursor.rowcount > 0
+
+
 async def registrar_fechamento(canal_id: int, staff_id: int):
     async with aiosqlite.connect(str(DATABASE)) as db:
         await db.execute(
