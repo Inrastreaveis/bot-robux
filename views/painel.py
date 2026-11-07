@@ -4,7 +4,7 @@ from database.configuracoes import obter_configuracoes
 
 from database.tickets import criar_ticket
 
-from views.botoes import TicketButtons
+from views.botoes import TicketButtons, SupportTicketButtons
 from views.calculadora_metodos import MetodoCompraView
 from views.tutorial_gamepass import TutorialGamepassView
 from views.verificar_roblox import VerificarRobloxModal
@@ -104,10 +104,18 @@ class AbrirTicket(discord.ui.View):
         )
 
         mencoes, allowed_mentions = montar_mencoes_abertura(interaction.guild, interaction.user, config)
+        # Tickets de suporte recebem controles próprios de atendimento.
+        # Os tickets de compra/Korblox/tutorial mantêm o fluxo comercial atual.
+        ticket_view = (
+            SupportTicketButtons()
+            if "suporte" in categoria_nome.casefold()
+            else TicketButtons()
+        )
+
         await canal.send(
             content=mencoes,
             embed=criar_embed_ticket(interaction.user, categoria_nome),
-            view=TicketButtons(),
+            view=ticket_view,
             allowed_mentions=allowed_mentions,
         )
         await enviar_pix_automatico(canal, config, 0, metodo_compra)
