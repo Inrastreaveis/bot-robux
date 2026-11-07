@@ -34,13 +34,14 @@ class LojaBot(commands.Bot):
         await self.load_all_cogs()
 
         from views.painel import AbrirTicket
-        from views.botoes import TicketButtons
+        from views.botoes import TicketButtons, SupportTicketButtons
         from views.confirmar_pedido import ConfirmarPedido
         from views.avaliacao import AvaliacaoView, EstrelasView
         from views.pix import PixCopyView
 
         self.add_view(AbrirTicket())
         self.add_view(TicketButtons())
+        self.add_view(SupportTicketButtons())
         self.add_view(PixCopyView())
         self.add_view(AvaliacaoView())
         self.add_view(EstrelasView())
