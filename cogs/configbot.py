@@ -83,7 +83,9 @@ def resumo_config(config: dict) -> discord.Embed:
             f"Categoria de tickets: `{config.get('category_tickets_id', 0)}`\n"
             f"Cargo Staff: `{config.get('staff_role_id', 0)}`\n"
             f"Cargo VIP: `{config.get('vip_role_id', 0)}`\n"
-            f"Cargos adicionais mencionados: {cargos_texto}"
+            f"Cargos adicionais mencionados: {cargos_texto}\n"
+            f"Canal de avaliações do suporte: "
+            f"{'<#' + str(config.get('support_reviews_channel_id')) + '>' if config.get('support_reviews_channel_id') else 'Não configurado — use /canalavaliacao'}"
         ),
         inline=False,
     )
