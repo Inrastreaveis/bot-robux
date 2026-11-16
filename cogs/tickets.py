@@ -9,7 +9,7 @@ from discord import app_commands
 from views.painel import AbrirTicket
 from utils.permissions import is_staff
 from database.configuracoes import obter_configuracoes, salvar_configuracoes
-from database.tickets import buscar_ticket
+from database.tickets import buscar_ticket, atualizar_status_ticket
 from utils.ticket_support import PURCHASE_METHODS, eh_anexo_comprovante, mencoes_administracao
 
 
@@ -248,6 +248,107 @@ class Tickets(commands.Cog):
             "A partir de agora, as avaliações dos tickets de **Suporte Técnico** serão publicadas nesse canal. "
             "As avaliações de compras continuam no canal de avaliações já utilizado.",
             ephemeral=True,
+        )
+
+    @app_commands.command(
+        name="reabrirticket",
+        description="Reabrir um ticket encerrado e reativar os botões de atendimento."
+    )
+    async def reabrirticket(self, interaction: discord.Interaction):
+        if not await is_staff(interaction):
+            return await interaction.response.send_message(
+                "❌ Apenas a equipe pode reabrir tickets.", ephemeral=True
+            )
+
+        ticket = await buscar_ticket(interaction.channel.id)
+        if ticket is None:
+            return await interaction.response.send_message(
+                "❌ Este canal não possui um ticket no banco de dados.", ephemeral=True
+            )
+        if str(ticket[10]).casefold() != "fechado":
+            return await interaction.response.send_message(
+                "ℹ️ Este ticket já está aberto.", ephemeral=True
+            )
+
+        await interaction.response.defer(ephemeral=True)
+        from views.botoes import TicketButtons, SupportTicketButtons
+        from views.tutorial_gamepass import TutorialGamepassTicketButton
+
+        eh_suporte = "suporte" in str(ticket[4] or "").casefold()
+        painel = None
+        avaliacoes = []
+        async for msg in interaction.channel.history(limit=100):
+            ids = {
+                component.custom_id
+                for row in msg.components
+                for component in row.children
+                if getattr(component, "custom_id", None)
+            }
+            if "assumir_ticket" in ids or "support_assumir_ticket" in ids:
+                painel = msg
+            if "avaliacao_iniciar" in ids or (
+                msg.embeds and msg.embeds[0].title and
+                msg.embeds[0].title.startswith("⭐ Avaliação")
+            ):
+                avaliacoes.append(msg)
+
+        if painel is None:
+            return await interaction.followup.send(
+                "❌ Não encontrei a mensagem original com os botões. Nenhuma alteração foi feita.",
+                ephemeral=True
+            )
+
+        if eh_suporte:
+            view = SupportTicketButtons()
+        else:
+            vip_aplicado = bool(ticket[9]) or bool(ticket[14])
+            view = TicketButtons(vip_aplicado=vip_aplicado)
+            if str(ticket[12] or "") == "Gamepass":
+                view.add_item(TutorialGamepassTicketButton())
+
+        embed = painel.embeds[0].copy() if painel.embeds else None
+        if embed is not None:
+            linhas = (embed.description or "").splitlines()
+            linhas = [
+                "📌 **Status:** 🟢 Aguardando atendimento"
+                if linha.startswith("📌 **Status:**") else linha
+                for linha in linhas
+            ]
+            embed.description = "\n".join(linhas)
+            embed.color = discord.Color.green()
+
+        try:
+            await painel.edit(embed=embed, view=view)
+        except discord.HTTPException:
+            return await interaction.followup.send(
+                "❌ Não foi possível restaurar os botões. Verifique as permissões do bot.",
+                ephemeral=True
+            )
+
+        await atualizar_status_ticket(interaction.channel.id, "Aguardando")
+        # Restaura a permissão individual retirada de quem fechou o ticket.
+        fechado_por = ticket[3]
+        if fechado_por:
+            membro = interaction.guild.get_member(int(fechado_por))
+            if membro:
+                overwrite = interaction.channel.overwrites_for(membro)
+                if overwrite.send_messages is False:
+                    overwrite.send_messages = None
+                    try:
+                        await interaction.channel.set_permissions(membro, overwrite=overwrite)
+                    except discord.HTTPException:
+                        pass
+
+        # A avaliação anterior já não deve aceitar respostas.
+        for msg in avaliacoes:
+            try:
+                await msg.edit(view=None)
+            except discord.HTTPException:
+                pass
+
+        await interaction.followup.send(
+            "✅ Ticket reaberto. Os botões do painel estão ativos novamente.",
+            ephemeral=True
         )
 
     @commands.Cog.listener()
