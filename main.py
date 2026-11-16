@@ -30,6 +30,9 @@ class LojaBot(commands.Bot):
         print("📦 Criando banco...")
         await criar_banco()
 
+        from utils.github_backup import github_backup_loop
+        self.backup_task = asyncio.create_task(github_backup_loop(self))
+
         print("📦 Carregando Cogs...")
         await self.load_all_cogs()
 
